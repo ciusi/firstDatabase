@@ -18,9 +18,11 @@ mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTop
 // Rotte
 const authorsRouter = require('./routes/authors');
 const blogPostsRouter = require('./routes/blogPost');
+const authRouter = require('./routes/auth');
 
 app.use('/authors', authorsRouter);
 app.use('/blogPosts', blogPostsRouter);
+app.use('/auth', authRouter);
 
 // Servire i file statici del frontend
 app.use(express.static(path.join(__dirname, '../fe/build')));

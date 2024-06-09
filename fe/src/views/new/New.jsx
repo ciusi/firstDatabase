@@ -5,7 +5,7 @@ import { EditorState, convertToRaw } from 'draft-js';
 import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css';
 import "./styles.css";
 import draftToHtml from "draftjs-to-html";
-import axios from "axios";
+import axios from "../auth/axiosConfig"; // Importata configurazione Axios
 
 const NewBlogPost = () => {
   const [editorState, setEditorState] = useState(() => EditorState.createEmpty());
@@ -44,7 +44,7 @@ const NewBlogPost = () => {
     console.log("Submitting post:", newPost);
 
     try {
-      const response = await axios.post("http://localhost:5000/blogPosts", newPost);
+      const response = await axios.post("/blogPosts", newPost);
       console.log("Blog post created:", response.data);
     } catch (error) {
       console.error("There was an error creating the blog post!", error);

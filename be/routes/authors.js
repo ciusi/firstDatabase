@@ -5,6 +5,7 @@ const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 require('dotenv').config();
+const authMiddleware = require('../middleware/authMiddleware');
 
 // Configurazione di Cloudinary
 cloudinary.config({
@@ -26,7 +27,7 @@ const storage = new CloudinaryStorage({
 const parser = multer({ storage: storage });
 
 // Rotta per ottenere la lista degli autori con paginazione
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
@@ -57,12 +58,12 @@ router.get('/', async (req, res) => {
 });
 
 // Rotta per ottenere un singolo autore
-router.get('/:id', getAuthor, (req, res) => {
+router.get('/:id', authMiddleware, getAuthor, (req, res) => {
   res.json(res.author);
 });
 
 // Rotta per creare un nuovo autore
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   const author = new Author({
     nome: req.body.nome,
     cognome: req.body.cognome,
@@ -97,7 +98,7 @@ router.post('/', async (req, res) => {
 });
 
 // Rotta per modificare un autore
-router.put('/:id', getAuthor, async (req, res) => {
+router.put('/:id', authMiddleware, getAuthor, async (req, res) => {
   if (req.body.nome != null) {
     res.author.nome = req.body.nome;
   }
@@ -123,7 +124,7 @@ router.put('/:id', getAuthor, async (req, res) => {
 });
 
 // Rotta per cancellare un autore
-router.delete('/:id', getAuthor, async (req, res) => {
+router.delete('/:id', authMiddleware, getAuthor, async (req, res) => {
   try {
     await Author.deleteOne({ _id: req.params.id });
     res.json({ message: 'Autore cancellato' });
@@ -148,7 +149,7 @@ async function getAuthor(req, res, next) {
 }
 
 // Rotta per caricare un'immagine per l'autore specificato
-router.patch('/:id/avatar', parser.single('avatar'), async (req, res) => {
+router.patch('/:id/avatar', authMiddleware, parser.single('avatar'), async (req, res) => {
   console.log('Richiesta PATCH /:id/avatar ricevuta'); // Log inizio richiesta
 
   try {
