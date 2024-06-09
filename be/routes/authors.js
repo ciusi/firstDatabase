@@ -1,28 +1,63 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const router = express.Router();
 const Author = require('../models/authors');
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+require('dotenv').config();
 
-// Middleware per verificare l'ObjectId
-function checkObjectId(req, res, next) {
-  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ message: 'Invalid ID' });
-  }
-  next();
-}
+// Configurazione di Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-// Rotta per ottenere la lista degli autori
+// Configurazione di multer-storage-cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'avatars',
+    format: async (req, file) => 'jpg', // Formato immagine
+    public_id: (req, file) => file.originalname,
+  },
+});
+
+const parser = multer({ storage: storage });
+
+// Rotta per ottenere la lista degli autori con paginazione
 router.get('/', async (req, res) => {
   try {
-    const authors = await Author.find();
-    res.json(authors);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+
+    const results = {};
+
+    if (endIndex < await Author.countDocuments().exec()) {
+      results.next = {
+        page: page + 1,
+        limit: limit
+      };
+    }
+
+    if (startIndex > 0) {
+      results.previous = {
+        page: page - 1,
+        limit: limit
+      };
+    }
+
+    results.results = await Author.find().limit(limit).skip(startIndex).exec();
+    res.json(results);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // Rotta per ottenere un singolo autore
-router.get('/:id', checkObjectId, getAuthor, (req, res) => {
+router.get('/:id', getAuthor, (req, res) => {
   res.json(res.author);
 });
 
@@ -38,6 +73,23 @@ router.post('/', async (req, res) => {
 
   try {
     const newAuthor = await author.save();
+
+    // Invia email di benvenuto
+    const msg = {
+      to: newAuthor.email,
+      from: 'ciuffetellisilvia@com', // indirizzo email verificato su SendGrid (rivedere)
+      subject: 'Benvenuto su Strive Blog!',
+      text: `Ciao ${newAuthor.nome}, benvenuto su Strive Blog!`,
+    };
+
+    await sgMail.send(msg)
+      .then(() => {
+        console.log('Email sent');
+      })
+      .catch((error) => {
+        console.error('Error sending email:', error.response.body);
+      });
+
     res.status(201).json(newAuthor);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -45,7 +97,7 @@ router.post('/', async (req, res) => {
 });
 
 // Rotta per modificare un autore
-router.put('/:id', checkObjectId, getAuthor, async (req, res) => {
+router.put('/:id', getAuthor, async (req, res) => {
   if (req.body.nome != null) {
     res.author.nome = req.body.nome;
   }
@@ -71,12 +123,8 @@ router.put('/:id', checkObjectId, getAuthor, async (req, res) => {
 });
 
 // Rotta per cancellare un autore
-router.delete('/:id', checkObjectId, async (req, res) => {
+router.delete('/:id', getAuthor, async (req, res) => {
   try {
-    const author = await Author.findById(req.params.id);
-    if (author == null) {
-      return res.status(404).json({ message: 'Autore non trovato' });
-    }
     await Author.deleteOne({ _id: req.params.id });
     res.json({ message: 'Autore cancellato' });
   } catch (err) {
@@ -98,5 +146,33 @@ async function getAuthor(req, res, next) {
   res.author = author;
   next();
 }
+
+// Rotta per caricare un'immagine per l'autore specificato
+router.patch('/:id/avatar', parser.single('avatar'), async (req, res) => {
+  console.log('Richiesta PATCH /:id/avatar ricevuta'); // Log inizio richiesta
+
+  try {
+    if (!req.file) {
+      console.log('Nessun file caricato'); // Log mancanza file
+      return res.status(400).json({ message: 'Nessun file caricato' });
+    }
+
+    console.log('File caricato:', req.file); // Log dettagli file caricato
+
+    const author = await Author.findById(req.params.id);
+    if (!author) {
+      console.log('Autore non trovato'); // Log autore non trovato
+      return res.status(404).json({ message: 'Autore non trovato' });
+    }
+
+    author.avatar = req.file.path;
+    await author.save();
+    console.log('Avatar aggiornato con successo'); // Log successo
+    res.json(author);
+  } catch (err) {
+    console.error('Errore nel caricamento dell\'avatar:', err); // Log errore dettagliato
+    res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;
